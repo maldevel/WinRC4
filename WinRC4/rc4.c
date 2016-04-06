@@ -20,16 +20,49 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <Wincrypt.h>
 #include <stdio.h>
 #define MY_ENCODING_TYPE  (PKCS_7_ASN_ENCODING | X509_ASN_ENCODING)
+#include "common.h"
 #include "base64.h"
 #include "rc4.h"
 
-bool CryptoInit(HCRYPTPROV *hCryptProv)
+static bool generateKey(HCRYPTKEY *key, HCRYPTPROV provider, ALG_ID algid, const unsigned char *password, unsigned long pLen)
 {
-	if (!CryptAcquireContextW(hCryptProv, NULL, NULL, PROV_RSA_FULL, 0))
+	if (!provider || password == NULL)
+		return false;
+
+	HCRYPTHASH hash;
+
+	if (!CryptCreateHash(provider, CALG_SHA1, 0, 0, &hash))
+	{
+		printf("Error: %d\n", GetLastError());
+		return false;
+	}
+
+	if (!hash)
+		return false;
+
+	if (!CryptHashData(hash, password, pLen, 0))
+	{
+		CryptDestroyHash(hash);
+		return false;
+	}
+
+	if (!CryptDeriveKey(provider, algid, hash, CRYPT_EXPORTABLE, key))
+	{
+		CryptDestroyHash(hash);
+		return false;
+	}
+
+	CryptDestroyHash(hash);
+	return true;
+}
+
+bool CryptoInit(HCRYPTKEY *key, HCRYPTPROV *provider, const unsigned char *password, unsigned long pLen)
+{
+	if (!CryptAcquireContextW(provider, NULL, NULL, PROV_RSA_FULL, 0))
 	{
 		if (GetLastError() == NTE_BAD_KEYSET)
 		{
-			if (!CryptAcquireContextW(hCryptProv, NULL, NULL, PROV_RSA_FULL, CRYPT_NEWKEYSET))
+			if (!CryptAcquireContextW(provider, NULL, NULL, PROV_RSA_FULL, CRYPT_NEWKEYSET))
 			{
 				printf("Error: %d\n", GetLastError());
 				return false;
@@ -42,10 +75,99 @@ bool CryptoInit(HCRYPTPROV *hCryptProv)
 		}
 	}
 
+	if (!generateKey(key, *provider, CALG_RC4, password, pLen))
+	{
+		printf("Error: %d\n", GetLastError());
+		if (*provider) CryptReleaseContext(*provider, 0);
+		return false;
+	}
+
 	return true;
 }
 
-void CryptoUninit(HCRYPTPROV hCryptProv)
+bool Encrypt(HCRYPTKEY key, char **cipherText, unsigned long *cLen, unsigned char *plainText, unsigned long pLen)
 {
-	if (hCryptProv)	if (!CryptReleaseContext(hCryptProv, 0)) printf("Error: %d\n", GetLastError());
+	unsigned long len = 0;
+	unsigned char *encrypted = 0;
+	unsigned long enLen = 0;
+
+	len = pLen + 1;
+
+	if (!CryptEncrypt(key, 0, TRUE, 0, NULL, &len, 0))
+	{
+		if (key) CryptDestroyKey(key);
+		return false;
+	}
+
+	enLen = len;
+
+	encrypted = (unsigned char *)malloc(len * sizeof(unsigned char));
+	if (encrypted == NULL)
+	{
+		if (key) CryptDestroyKey(key);
+		return false;
+	}
+	SecureZeroMemory(encrypted, len * sizeof(unsigned char));
+
+	memcpy_s(encrypted, len, plainText, pLen + 1);
+
+	len = pLen + 1;
+	if (!CryptEncrypt(key, 0, TRUE, 0, encrypted, &len, enLen))
+	{
+		SAFE_FREE(encrypted);
+		if (key) CryptDestroyKey(key);
+		return false;
+	}
+
+	if (!Base64EncodeA(cipherText, cLen, encrypted, enLen))
+	{
+		SAFE_FREE(encrypted);
+		if (key) CryptDestroyKey(key);
+		return false;
+	}
+
+	SAFE_FREE(encrypted);
+
+	return true;
+}
+
+bool Decrypt(HCRYPTKEY key, unsigned char **plainText, char *cipherText, unsigned long cLen)
+{
+	unsigned long len = 0;
+	unsigned long decodedLen = 0;
+	char *decoded = 0;
+
+	if (!Base64DecodeA(&decoded, &decodedLen, cipherText, cLen))
+	{
+		if (key) CryptDestroyKey(key);
+		return false;
+	}
+
+	*plainText = (unsigned char *)malloc(decodedLen * sizeof(unsigned char));
+	if (*plainText == NULL)
+	{
+		if (key) CryptDestroyKey(key);
+		return false;
+	}
+	SecureZeroMemory(*plainText, decodedLen * sizeof(unsigned char));
+
+	memcpy_s(*plainText, decodedLen, decoded, decodedLen);
+
+	SAFE_FREE(decoded);
+
+	len = decodedLen;
+	if (!CryptDecrypt(key, 0, TRUE, 0, *plainText, &len))
+	{
+		SAFE_FREE(*plainText);
+		if (key) CryptDestroyKey(key);
+		return false;
+	}
+
+	return true;
+}
+
+void CryptoUninit(HCRYPTKEY key, HCRYPTPROV provider)
+{
+	if (key) if (!CryptDestroyKey(key)) printf("Error: %d\n", GetLastError());
+	if (provider) if (!CryptReleaseContext(provider, 0)) printf("Error: %d\n", GetLastError());
 }

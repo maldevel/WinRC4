@@ -20,5 +20,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <stdbool.h>
 
-bool CryptoInit(HCRYPTPROV *hCryptProv);
-void CryptoUninit(HCRYPTPROV hCryptProv);
+bool CryptoInit(HCRYPTKEY *key, HCRYPTPROV *provider, const unsigned char *password, unsigned long pLen);
+bool Encrypt(HCRYPTKEY key, char **cipherText, unsigned long *cLen, unsigned char *plainText, unsigned long pLen);
+bool Decrypt(HCRYPTKEY key, unsigned char **plainText, char *cipherText, unsigned long cLen);
+void CryptoUninit(HCRYPTKEY key, HCRYPTPROV provider);

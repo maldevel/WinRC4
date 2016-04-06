@@ -21,51 +21,46 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "common.h"
 #include "rc4.h"
 
-int main(int argc, char **argv)
+int main(void)
 {
-	/*char *encoded = 0;
-	unsigned long encodedLen = 0, decodedLen = 0;
-	char *decoded = 0;
-	WCHAR *encodedW = 0;*/
 	HCRYPTPROV hCryptProv = 0;
+	HCRYPTKEY key = 0;
+	unsigned long cLen = 0;
+	char *cipherText = 0;
+	char *plainText = "PLAIN_TEXT_PLAIN_TEXT\0";
+	char *password = "!TESTING_PASS_TESTING_PASS!\0";
+	unsigned char *decrypted = 0;
 
-	if (argc != 2)
+	if (!CryptoInit(&key, &hCryptProv, password, strlen(password)))
 	{
-		printf("usage: WinRC4.exe <string to encrypt>\n");
+		printf("Crypto initializing failed\n");
 		return EXIT_FAILURE;
 	}
 
-	printf("\nText: %s\n", argv[1]);
-
-	if (!CryptoInit(&hCryptProv))
+	if (!Encrypt(key, &cipherText, &cLen, (unsigned char *)plainText, strlen(plainText)))
 	{
-		printf("Hash 512 generation failed\n");
+		printf("Encryption failed\n");
+		if (hCryptProv) CryptReleaseContext(hCryptProv, 0);
 		return EXIT_FAILURE;
 	}
 
-	CryptoUninit(hCryptProv);
+	printf("Encrypted string: %s\n", cipherText);
 
-	/*if (Base64EncodeA(&encoded, &encodedLen, argv[1], strlen(argv[1])))
+	if (!Decrypt(key, &decrypted, cipherText, cLen))
 	{
-		printf("Base64 encoded: %s\n", encoded);
-		if (Base64DecodeA(&decoded, &decodedLen, encoded, encodedLen))
-		{
-			printf("Base64 decoded: %s\n", decoded);
-			SAFE_FREE(encoded);
-			SAFE_FREE(decoded);
-		}
+		printf("Decryption failed\n");
+		SAFE_FREE(cipherText);
+		if (hCryptProv) CryptReleaseContext(hCryptProv, 0);
+		return EXIT_FAILURE;
 	}
 
-	if (Base64EncodeW(&encodedW, &encodedLen, "tester", 6))
-	{
-		wprintf(L"Base64 encoded: %s\n", encodedW);
-		if (Base64DecodeW(&decoded, &decodedLen, encodedW, encodedLen))
-		{
-			printf("Base64 decoded: %s\n", decoded);
-			SAFE_FREE(encodedW);
-			SAFE_FREE(decoded);
-		}
-	}*/
+	SAFE_FREE(cipherText);
+
+	printf("Decrypted string: %s\n", decrypted);
+
+	SAFE_FREE(decrypted);
+
+	CryptoUninit(key, hCryptProv);
 
 	return EXIT_SUCCESS;
 }
