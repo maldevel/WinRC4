@@ -18,7 +18,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <Windows.h>
 #include <Wincrypt.h>
+#include <stdio.h>
 #define MY_ENCODING_TYPE  (PKCS_7_ASN_ENCODING | X509_ASN_ENCODING)
+#include "base64.h"
 #include "rc4.h"
 
 bool CryptoInit(HCRYPTPROV *hCryptProv)

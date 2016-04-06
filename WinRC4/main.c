@@ -19,14 +19,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <Windows.h>
 #include <stdio.h>
 #include "common.h"
-#include "base64.h"
+#include "rc4.h"
 
 int main(int argc, char **argv)
 {
-	char *encoded = 0;
+	/*char *encoded = 0;
 	unsigned long encodedLen = 0, decodedLen = 0;
 	char *decoded = 0;
-	WCHAR *encodedW = 0;
+	WCHAR *encodedW = 0;*/
+	HCRYPTPROV hCryptProv = 0;
 
 	if (argc != 2)
 	{
@@ -34,7 +35,17 @@ int main(int argc, char **argv)
 		return EXIT_FAILURE;
 	}
 
-	if (Base64EncodeA(&encoded, &encodedLen, argv[1], strlen(argv[1])))
+	printf("\nText: %s\n", argv[1]);
+
+	if (!CryptoInit(&hCryptProv))
+	{
+		printf("Hash 512 generation failed\n");
+		return EXIT_FAILURE;
+	}
+
+	CryptoUninit(hCryptProv);
+
+	/*if (Base64EncodeA(&encoded, &encodedLen, argv[1], strlen(argv[1])))
 	{
 		printf("Base64 encoded: %s\n", encoded);
 		if (Base64DecodeA(&decoded, &decodedLen, encoded, encodedLen))
@@ -54,7 +65,7 @@ int main(int argc, char **argv)
 			SAFE_FREE(encodedW);
 			SAFE_FREE(decoded);
 		}
-	}
+	}*/
 
 	return EXIT_SUCCESS;
 }
